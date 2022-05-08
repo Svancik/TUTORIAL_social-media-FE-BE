@@ -1,0 +1,59 @@
+.sidebar{
+    flex: 3;
+    height: calc(100vh - 50px); /* 100vh je overflow, použijeme calc abychom provedli výpočet kdy od 100vh odečteme 50px což je navbar */
+    overflow-y: scroll; /* obsah který v divu sidebar přeteká se zobrazí skrze scrollbar */
+    position: sticky; /* díky tomu nám sidebar zůstane vždy přišpendlen i při scrollování */
+    top: 50px; /* díky tomuto nastavíme top kde dojde k přišpendlení - zvolili jsme 50px jelikož tak je široký topbar.
+                  Kdyby bylo nastaveno top: 1 px; tak při scrolování se to scrollne do bodu 1px zhora a až pak je to sticky.
+                  Díky top: 50px to vypadá že se sidebar nehýbé, jelikož je napozicován přímo pod navbarem a nemá prostor pro scroll.*/
+}
+/* Pomocí kódu si vytvoříme CUSTOM skrolovací lištu */
+::-webkit-scrollbar{
+    width: 5px;
+}
+::-webkit-scrollbar-track{
+    background-color: #f1f1f1;
+}
+::-webkit-scrollbar-thumb{
+    background-color: rgb(223, 221, 221);
+}
+
+.sidebarWrapper{
+    padding: 20px;
+   
+}
+
+.sidebarList{
+    padding: 0;
+    margin:0;
+    list-style: none;
+}
+
+.sidebarListItem{
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.sidebarIcon{
+    margin-right: 15px; /* mr15 */
+}
+
+.sidebarButton{
+    width: 150px;
+    border:none;
+    padding:  10px;
+    border-radius: 5px;
+    font-weight: 500;
+}
+
+.sidebarHr{
+    margin: 20px 0; /* margin top, bottom = 20px & margin left, right = 0px -*/
+}
+
+.sidebarFriendList{
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+

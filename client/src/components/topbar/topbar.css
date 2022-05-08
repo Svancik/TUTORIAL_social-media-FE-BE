@@ -1,0 +1,93 @@
+.topbarContainer{
+    height: 50px;
+    width: 100%;
+    background-color: #1877f2;
+    display:flex;
+    align-items: center;
+    position: sticky;  /* vždy bude topbar přilepen na vrchu stránky - sticky */
+    top: 0;
+    z-index: 999;
+}
+.topbarLeft{    
+    flex: 3;    /* bude zabírat 3 jednotky šířky */
+}
+.topbarCenter{
+    flex: 5;    /* bude zabírat 5 jednotek šířky */
+}
+.searchbar{
+    width:100%;
+    height: 30px;
+    background-color: white;
+    border-radius: 30px;
+    display:flex;
+    align-items: center;    /* zarovná vertikálně */
+}
+
+.searchIcon{
+    font-size: 20px !important;   /* museli jsme použít !important, jedná se o ikonu se svými styly a musíme použít important k uprednostneni tohoto*/
+    margin-left: 10px;
+}
+
+.searchInput{
+    border: none;
+    width: 70%;
+}
+
+.searchInput:focus{
+    outline: none;
+}
+
+.topbarRight{
+    flex: 4;
+    display:flex;   /* horizontálně vycentrujeme */
+    align-items: center;    
+    justify-content: space-around;  /* horizontálně nastavíme rovnoměrné mezery mezi elementy v divu topbarRight */
+    color: white;
+}
+
+.topbarLink{
+    margin-right: 10px;     /* "mr10" + TAB = texting shortcut */
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.topbarIcons{
+    display: flex; /* "df" + TAB */
+}
+
+.topbarIconItem{
+    margin-right: 15px;
+    cursor: pointer;
+    position: relative;
+}
+
+.topbarIconBadge{   /* toto je class pro červenou notifikaci zpráv */
+    width: 15px;
+    height: 15px;
+    background-color: red;
+    border-radius: 50%;
+    color:white;
+    position: absolute; /* může být absolute protože page bude relative k toperu*/
+    top: -5px;
+    right: -5px;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* tímto vycentrujeme číslo uvnitř notifikace na střed (horizontálně)*/
+    font-size: 12px;
+}
+
+.topbarImg{
+    width: 32px;
+    height: 32px;
+    border-radius: 50%; /* vytvoříme kruh okolo profile picture */
+    object-fit: cover;  /* profile picture vyplní obsah divu (32px*32px) */
+    cursor: pointer;
+}
+
+.logo{
+    font-size: 24px;
+    margin-left: 20px;
+    font-weight: bold;
+    color:white;
+    cursor: pointer;
+}
