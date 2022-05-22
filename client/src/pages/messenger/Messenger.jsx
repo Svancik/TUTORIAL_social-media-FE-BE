@@ -3,8 +3,23 @@ import Topbar from "./../../components/topbar/Topbar";
 import Conversation from "../../components/conversations/Conversation";
 import Message from "./../../components/message/Message";
 import ChatOnline from "./../../components/chatOnline/ChatOnline";
+import { useContext, useState, useEffect } from "react";
+import { AuthContext } from "./../../context/AuthContext";
+import axios from "axios";
 
 export default function Messenger() {
+  const API = process.env.REACT_APP_DEV_BASE_URL;
+  const [conversations, setConversations] = useState([]);
+  const { user } = useContext(AuthContext);
+
+  // nahrání konverzací z databáze do state po načtení stránky
+  useEffect(() => {
+    const getConversations = async () => {
+      const res = await axios.get(`${API}conversations/${user._id}`);
+      setConversations(res.data);
+    };
+    getConversations();
+  }, [user]);
   return (
     <>
       <Topbar />
@@ -16,11 +31,9 @@ export default function Messenger() {
               placeholder="Search for friends"
               className="chatMenuInput"
             />
-            <Conversation />
-            <Conversation />
-            <Conversation />
-            <Conversation />
-            <Conversation />
+            {conversations.map((c) => (
+              <Conversation key={c._id} conversation={c} currentUser={user} />
+            ))}
           </div>
         </div>
         <div className="chatBox">
