@@ -31,7 +31,7 @@ export default function Conversation({ conversation, currentUser }) {
         }
       />
       {/* Níže vypíšeme název přítele. */}
-      <span className="conversationName">{user.username}</span>
+      <span className="conversationName">{user?.username}</span>
     </div>
   );
 }
