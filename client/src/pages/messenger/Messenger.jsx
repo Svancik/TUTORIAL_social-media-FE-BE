@@ -11,6 +11,7 @@ export default function Messenger() {
   const API = process.env.REACT_APP_DEV_BASE_URL;
   const [conversations, setConversations] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
+  const [newMessage, setNewMessage] = useState("");
   const [messages, setMessages] = useState(null);
   const { user } = useContext(AuthContext);
   // nahrání konverzací z databáze do state po načtení stránky
@@ -37,6 +38,21 @@ export default function Messenger() {
     };
     getMessages();
   }, [currentChat]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const message = {
+      sender: user._id,
+      text: newMessage,
+      conversationId: currentChat._id,
+    };
+    try {
+      const res = await axios.post(`${API}messages/`, message);
+      setMessages([...messages, res.data]);
+    } catch (err) {
+      console.log(err);
+    }
+  };
 
   console.log(messages);
 
@@ -71,8 +87,12 @@ export default function Messenger() {
                   <textarea
                     className="chatMessageInput"
                     placeholder="Write something..."
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    value={newMessage}
                   ></textarea>
-                  <button className="chatSubmitButton">Send</button>
+                  <button className="chatSubmitButton" onClick={handleSubmit}>
+                    Send
+                  </button>
                 </div>
               </>
             ) : (
