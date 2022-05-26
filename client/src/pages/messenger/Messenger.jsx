@@ -3,7 +3,7 @@ import Topbar from "./../../components/topbar/Topbar";
 import Conversation from "../../components/conversations/Conversation";
 import Message from "./../../components/message/Message";
 import ChatOnline from "./../../components/chatOnline/ChatOnline";
-import { useContext, useState, useEffect } from "react";
+import { useContext, useState, useEffect, useRef } from "react";
 import { AuthContext } from "./../../context/AuthContext";
 import axios from "axios";
 
@@ -14,6 +14,7 @@ export default function Messenger() {
   const [newMessage, setNewMessage] = useState("");
   const [messages, setMessages] = useState(null);
   const { user } = useContext(AuthContext);
+  const scrollRef = useRef();
   // nahrání konverzací z databáze do state po načtení stránky
   useEffect(() => {
     const getConversations = async () => {
@@ -41,6 +42,7 @@ export default function Messenger() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("userId:", user._id);
     const message = {
       sender: user._id,
       text: newMessage,
@@ -49,12 +51,15 @@ export default function Messenger() {
     try {
       const res = await axios.post(`${API}messages/`, message);
       setMessages([...messages, res.data]);
+      setNewMessage("");
     } catch (err) {
       console.log(err);
     }
   };
 
-  console.log(messages);
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   return (
     <>
@@ -80,7 +85,9 @@ export default function Messenger() {
               <>
                 <div className="chatBoxTop">
                   {messages.map((m) => (
-                    <Message message={m} own={m.sender === user?.id} />
+                    <div ref={scrollRef}>
+                      <Message message={m} own={m.sender === user?._id} />
+                    </div>
                   ))}
                 </div>
                 <div className="chatBoxBottom">
