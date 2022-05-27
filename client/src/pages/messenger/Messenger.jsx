@@ -6,6 +6,7 @@ import ChatOnline from "./../../components/chatOnline/ChatOnline";
 import { useContext, useState, useEffect, useRef } from "react";
 import { AuthContext } from "./../../context/AuthContext";
 import axios from "axios";
+import { io } from "socket.io-client";
 
 export default function Messenger() {
   const API = process.env.REACT_APP_DEV_BASE_URL;
@@ -13,8 +14,21 @@ export default function Messenger() {
   const [currentChat, setCurrentChat] = useState(null);
   const [newMessage, setNewMessage] = useState("");
   const [messages, setMessages] = useState(null);
+  const socket = useRef();
   const { user } = useContext(AuthContext);
   const scrollRef = useRef();
+
+  useEffect(() => {
+    socket.current = io("ws://localhost:8900");
+  }, []);
+
+  useEffect(() => {
+    socket.current.emit("addUser", user._id);
+    socket.current.on("getUsers", (users) => {
+      console.log(users);
+    });
+  }, [user]);
+
   // nahrání konverzací z databáze do state po načtení stránky
   useEffect(() => {
     const getConversations = async () => {
@@ -86,7 +100,11 @@ export default function Messenger() {
                 <div className="chatBoxTop">
                   {messages.map((m) => (
                     <div ref={scrollRef}>
-                      <Message message={m} own={m.sender === user?._id} />
+                      <Message
+                        key={user?._id}
+                        message={m}
+                        own={m.sender === user?._id}
+                      />
                     </div>
                   ))}
                 </div>
