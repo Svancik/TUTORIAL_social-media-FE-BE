@@ -13,23 +13,39 @@ export default function Messenger() {
   const [conversations, setConversations] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
   const [newMessage, setNewMessage] = useState("");
+  const [arrivalMessage, setArrivalMessage] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState(null);
   const [messages, setMessages] = useState(null);
   const socket = useRef();
   const { user } = useContext(AuthContext);
   const scrollRef = useRef();
 
   useEffect(() => {
-    socket.current = io("ws://localhost:8900");
-  }, []);
+    //Pomocí kódu níže kontrolujeme zda arrivalMessage není prázdný a zároven zabranujeme aby zprávy viděl někdo jiný mimo 2 členy chatu.
+    arrivalMessage &&
+      currentChat?.members.includes(arrivalMessage.sender) &&
+      setMessages((prev) => [...prev, arrivalMessage]);
+  }, [arrivalMessage, currentChat]);
 
+  //napojení na socket.io & getMessage
+  useEffect(() => {
+    socket.current = io("ws://localhost:8900");
+    socket.current.on("getMessage", (data) => {
+      setArrivalMessage({
+        sender: data.senderId,
+        text: data.text,
+        createdAt: Date.now(),
+      });
+    });
+  }, []);
+  //získání userů
   useEffect(() => {
     socket.current.emit("addUser", user._id);
     socket.current.on("getUsers", (users) => {
-      console.log(users);
+      setOnlineUsers(users);
     });
   }, [user]);
-
-  // nahrání konverzací z databáze do state po načtení stránky
+  //nahrání konverzací z databáze do state po načtení stránky
   useEffect(() => {
     const getConversations = async () => {
       try {
@@ -40,8 +56,8 @@ export default function Messenger() {
       }
     };
     getConversations();
-  }, [user]);
-
+  }, [user._id]);
+  //získání zpráv z chatu
   useEffect(() => {
     const getMessages = async () => {
       try {
@@ -53,15 +69,30 @@ export default function Messenger() {
     };
     getMessages();
   }, [currentChat]);
-
+  //scrollování na konec chatu
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+  //odeslání zprávy chatu (na server & socket.io)
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("userId:", user._id);
     const message = {
       sender: user._id,
       text: newMessage,
       conversationId: currentChat._id,
     };
+
+    //Pomocí kódu níže zjistíme id 2. člena chatu tím, že jeho id se nerovná našemu id
+    const receiverId = currentChat.members.find(
+      (member) => member !== user._id
+    );
+
+    socket.current.emit("sendMessage", {
+      senderId: user._id,
+      receiverId, //receiverId => receiverId: receiverId;
+      text: newMessage,
+    });
+
     try {
       const res = await axios.post(`${API}messages/`, message);
       setMessages([...messages, res.data]);
@@ -70,10 +101,6 @@ export default function Messenger() {
       console.log(err);
     }
   };
-
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   return (
     <>
@@ -88,7 +115,11 @@ export default function Messenger() {
             />
             {conversations.map((c) => (
               <div key={c._id} onClick={() => setCurrentChat(c)}>
-                <Conversation key={c._id} conversation={c} currentUser={user} />
+                <Conversation
+                  key={Date.now()}
+                  conversation={c}
+                  currentUser={user}
+                />
               </div>
             ))}
           </div>
@@ -101,7 +132,7 @@ export default function Messenger() {
                   {messages.map((m) => (
                     <div ref={scrollRef}>
                       <Message
-                        key={user?._id}
+                        key={Date.now()}
                         message={m}
                         own={m.sender === user?._id}
                       />
@@ -129,7 +160,11 @@ export default function Messenger() {
         </div>
         <div className="chatOnline">
           <div className="chatOnlineWrapper">
-            <ChatOnline />
+            <ChatOnline
+              onlineUsers={onlineUsers}
+              currentId={user._id}
+              setCurrentChat={setCurrentChat}
+            />
           </div>
         </div>
       </div>
