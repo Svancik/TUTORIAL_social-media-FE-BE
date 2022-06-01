@@ -7,6 +7,7 @@ import { useContext, useState, useEffect, useRef } from "react";
 import { AuthContext } from "./../../context/AuthContext";
 import axios from "axios";
 import { io } from "socket.io-client";
+import zIndex from "@material-ui/core/styles/zIndex";
 
 export default function Messenger() {
   const API = process.env.REACT_APP_DEV_BASE_URL;
@@ -15,6 +16,7 @@ export default function Messenger() {
   const [newMessage, setNewMessage] = useState("");
   const [arrivalMessage, setArrivalMessage] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState(null);
+  const [secondUser, setSecondUser] = useState(null);
   const [messages, setMessages] = useState(null);
   const socket = useRef();
   const { user } = useContext(AuthContext);
@@ -42,7 +44,9 @@ export default function Messenger() {
   useEffect(() => {
     socket.current.emit("addUser", user._id);
     socket.current.on("getUsers", (users) => {
-      setOnlineUsers(users);
+      setOnlineUsers(
+        user.followings.filter((f) => users.some((u) => u.userId === f))
+      );
     });
   }, [user]);
   //nahrání konverzací z databáze do state po načtení stránky
@@ -55,7 +59,19 @@ export default function Messenger() {
         console.log(err);
       }
     };
+    const getSecondUser = async () => {
+      try {
+        const secondUser = currentChat.members.find(
+          (member) => member !== user._id
+        );
+        const res = await axios.get(`${API}users/${secondUser}`);
+        alert(res.data);
+      } catch (err) {
+        console.log(err);
+      }
+    };
     getConversations();
+    getSecondUser();
   }, [user._id]);
   //získání zpráv z chatu
   useEffect(() => {
@@ -135,6 +151,8 @@ export default function Messenger() {
                         key={Date.now()}
                         message={m}
                         own={m.sender === user?._id}
+                        userId={user?._id}
+                        senderId={m.sender}
                       />
                     </div>
                   ))}
