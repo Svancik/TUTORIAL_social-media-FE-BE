@@ -6,9 +6,6 @@ A) Iniciace
 - spustíme BE
 
 
-
-
-
 B) REACT ROUTER DOM (/profile, /login, /register, /)
 -----------------------------------------------------------------------------------------------------------------------------
 a) naimportujeme REACT-ROUTER-DOM (kvůli zobrazování odkazů)
@@ -1194,21 +1191,723 @@ const [file, setFile] = useState(null);
 /*
 
 
-
 APLIKACE DOKONČENA - POKRAČOVÁNÍ: CHATBOX
 
-NEFUNGUJE: SHARE OBRÁZKU/ RIGHTBAR FOLLOWOVÁNÍ
+.env soubory doplnit o :
+    client
+    GENERATE_SOURCEMAP=false
+    WDS_SOCKET_PORT=443
+
+    api
+    WDS_SOCKET_PORT=443
+
+---------------------------------------------------- CHATBOX ---------------------------------------------------------------
+Vytvoříme si stránku: Messenger.jsx,
+Vytvoříme si komponenty: Message.jsx, Conversation.jsx
+Nastylujeme si dle videa vizuální podobu chatu
+
+Q) CHATBOX - TVORBA UI DESIGNU
+---------------------------------------------------------------------------
+a) VIEW: Zobrazování zpráv a rozlišení zda jsou odemně nebo od přítele.
+    a1) Budeme si předávat do komponenty Message.jsx PROPS {own}. Díky tomu určíme zda je message naše, nebo přítele. */
+        export default function Message({ own }) {/*
+    a2) Tento props own použijeme jako className k .messagge => <div className="message own"></div>
+    a3) Nastylujeme .message.own aby byl text zprávy na 2. straně a měl jinou barvu. */
+        .message.own{ align-items: flex-end; }
+        .message.own .messageText{ background-color: rgb(241, 238, 238); color: black; } /*
+    a4) NASTAVÍME KONDIČNÍ className na základ {own} PROPS */
+        <div className={own ? "message own" : "message"}></div> /*
+    a5) Uvnitř Messenger budeme svou vlastní message nastavovat pomocí property own=true - viz níže. */
+        <Message own={true} />/*
+
+b) INPUT: Napsání zprávy do textového pole.
+Dolní komponenta bude obsahovat text-area + button. K oddělení text-area a button použijeme justify-content: space-between.
+
+PROBLÉM: Když máme hodně zpráv, tak se stane overflow a náš input je posunut dolů za zprávy.
+ŘEŠENÍ: Nastavíme si overflow u <div className="chatBoxTop"/> uvnitř komponenty <Messenger>, resp. uvnitř messenger.css
+
+c) Nastavení overflow: Wrapper: display:flex; flex-direction: column; => Child: height: 100%; overflow-y: scroll*/
+    // Messenger.jsx - takto vypadají komponenty které přetékají
+    <div className="chatBoxTop">
+        <Message />
+        <Message own={true} />
+        <Message />
+        <Message />
+    </div>    /*
+    c1) Nastylujeme chatBoxTop a nastavíme height na 100% a overflow-y: scroll.  */
+        .chatBoxTop{
+            height: 100%;
+            overflow-y: scroll;
+        }/*
+    DŮLEŽITÉ: KÓD VÝŠE NEBUDE FUNGOVAT POKUD NENASTAVÍME DO RODIČOVSKÉHO DIVU / WRAPPER = .chatBoxWrapper      
+    */
+        .chatBoxWrapper{
+            display: flex;
+            flex-direction: column;
+        } /*
+
+d) Nastavení zeleného kolečka online = ONLINE BADGE uvnitř "ChatOnline.jsx" & "chatOnline.css"
+Nastavíme pro ImgContainer position relative a pro badge position absolute. */
+.chatOnlineImgContainer{
+    position: relative;
+}
+.chatOnlineBadge{
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: lime;
+    top: 2px;
+    right: 2px;
+} /*
+
+
+R) BE: REST API CHATBOX - NAPOJENÍ NA API => ZÍSKÁVÁNÍ A ODESÍLÁNÍ ZPRÁV NA SERVER
+-------------------------------------------------------------------------------- 
+Vytvoříme 2 nové modely uvnitř API (již máme Post.js a User.js):
+    1) Conversation model - každý userId bude mít své relace konverzací
+    2) Message model - v každé konverzaci budou zprávy
+
+Vytvoříme 2 nové routes - viz výše.
+
+S) BE: VYTVOŘENÍ KONVERZACE (RELACE KONVERZACÍ)
+--------------------------------------------------------------------------
+    routes/conversation:
+        a) new conv
+        b) get conv of a user
+
+a) NEW CONV: ULOŽENÍ NOVÉ KONVERZACE - conversation ROUTE: POST */
+    router.post("/", async (req,res) =>{
+        const newConversation = new Conversation({
+            members: [req.body.senderId, req.body.receiverId] // z těla POST požadavku zjistíme id odesílatele a příjemce
+        });
+        try{
+            const savedConversation = await newConversation.save(); 
+            res.status(200)
+        } catch(err){
+            res.status(500).json(err)
+        }
+    }); /*>
+    Test ROUTE - nyní když přistoupíme na route /conversation, tak se vykonná POST request a uvnitř těla bude senderId a receiverId.
+    PROBLÉM: Nepřidali jsme Route do index.js - tudíž nám nebude fungovat */
+    // ŘEŠENÍ:
+    const conversationRoute = require("./routes/conversations");
+    app.use("/api/conversations", conversationRoute); /*
+    a1) TEST ROUTE - postman:
+        Zašleme na http://localhost:8800/api/conversations JSON OBJEKT uvnitř těla níže:
+            {
+                "senderId": "624377f73169ef0c85fc68d1",
+                "receiverId": "624378023169ef0c85fc68d3"
+            }
+        => HOTOVO - VŠE OK
+    ERROR: "throw new TypeError('Router.use() requires a middleware function but got a ' + gettype(fn))"
+    DŮVOD: NEEXPORTUJEME ROUTE NA KONCI SOUBORU.¨
+
+    WORKFLOW VYTVÁŘENÍ NOVÉ KONVERZACE:
+
+POST REQUEST s daty v req.body => Přečtení dat z req.body v ROUTE api/conversations => Vložení do MongoDB modelu a .save() => uložení na server
+
+b) GET CONV: NAČTENÍ KONVERZACE díky userId - ROUTE: GET
+Jak vyhledávat elementy v MongoDB?
+    - $in: The $in operator selects the documents where the value of a field equals any value in the specified array. 
+
+    conversations.js: */
+    router.get("/:userId", async(req,res)=>{
+        // pomocí $in vyhledáme pouze konverzace ve kterých je userId členem
+        try {
+            const conversation = await Conversation.find({
+                members: {$in:[req.params.userId]}  
+            });
+            res.status(200).json(conversation);
+        } catch (err) {
+            res.status(500).json(err);
+        }
+    }); /*
+
+T) BE: VYTVOŘENÍ MESSAGES (načtení zpráv v konverzaci)
+---------------------------------------------------------------------------
+    routes/messages:
+        a) add new message
+        b) get message of a user
+
+V message route při "add message" vložíme do postu celé tělo body requestu
+    => tzn. že body musí obsahovat položky níže:
+        - conversationId
+        - sender
+        - text.
+    viz níže: */
+    {
+        "conversationId":"6289fbce49e8a45743252532",
+        "sender":"624377f73169ef0c85fc68d1",
+        "text":"I like chicken meat."
+    } /*
+
+a) ADD NEW MESSAGE - přidání nové zprávy. */ 
+router.post("/", async (req,res)=>{
+    const newMessage = new Message(req.body);
+    try {
+        const savedMessage = await newMessage.save(); //uložíme celé tělo req.body do mongoDB - req.body bude obsahovat co potřebuje model Message
+        res.status(200).json(savedMessage);
+    } catch (err) {
+        res.status(500).json(err);
+    }
+}); /*
+
+b) GET A MESSAGE - získání zprávy na základě conversationId. */
+router.get("/:conversationId", async(req,res) =>{
+    try{
+        // Níže si nastavujeme podmínku: vyhledej všechny zprávy v MongoDb kde conversationId v URL === conversationId v MongoDB
+        const messages = await Message.find({
+            conversationId: req.params.conversationId,
+        });
+        res.status(200).json(messages);
+    } catch(err){
+        res.status(500).json(err);
+    }
+}); /*
+
+HOTOVO - MÁME HOTOVÉ REST API PRO KONVERZACE A ZPRÁVY - UMÍME JAK VYTVÁŘET TAK ZÍSKÁVAT => NYNÍ BUDEME FETCHOVAT DO KLIENTA
+
+
+U1) FE: FETCHING USER CONVERSATIONS FROM MONGODB - Načtení konverzací pro usera
+---------------------------------------------------------------------------------
+a) Načtení a renderování KONVERZACÍ pro daného Usera:
+    a1) Ujístíme ID usera => useContext */
+    const { user } = useContext(AuthContext);/*
+    a2) Načteme data z API auložíme do state */
+    useEffect(() => {
+        const getConversations = async () => {
+        try {
+            const res = await axios.get(`${API}conversations/${user._id}`);
+            setConversations(res.data);
+        } catch (err) {
+            console.log(err);
+        }
+        };
+        getConversations();
+    }, [user]); /*
+    a3) Vyrenderujeme na základě mapování komponenty <Conversation > a do prop vložíme mapovaný obj (data kovnerzace) z databáze jako props. */
+    <div className="chatMenuWrapper">
+        ...
+        {conversations.map((c) => (
+        <Conversation conversation={c} />
+        ))}
+    </div> /*
+    a4) Uvnitř conversation skrze useEffect HOOK uložíme konverzace do state a v levém sloupci je vyrenderujeme s názvem přítele a prof. obrázkem.*/
+      useEffect(() => {
+        // V conversation.member jsou 2x id - userId a id přítele => pomocí kódu níže vyfiltrujeme pouze id které se nerovnají userId = id přítele.
+        const friendId = conversation.members.find((m) => m !== currentUser._id);
+        // Získání usera z kterým má přihlášený user konverzaci (na základě conversation.members.id)
+        const getUser = async () => {
+        const res = await axios.get(`${API}users?userId=${friendId}`);
+        // Nastavuje state user === friend
+        setUser(res.data);
+        };
+        getUser();
+    }, [currentUser, conversation]);
+/*
+Nahrávání změn na git:
+git add složka
+git commit -m "popis verze"
+git push
+
+
+U2) FE: FETCHING USER MESSAGES FROM MONGODB - Načtení ZPRÁV (uvnitř konverzací) pro usera
+-----------------------------------------------------------------------------------------------------
+a) Vytoříme si ve state 2 nové stavy:
+    - currentChat = zvolené chatovací okno / stránka 
+    - messages = zprávy uvnitř daného chatu a konverzace
+
+b) Kondičně vyrenderujeme obsah chatovacího okna (Messenger.jsx):
+    - Existuje ve state currentChat, neboli je zvoleno chatovací okno?
+        => true: vyrenderuj obsah chatovacího okna
+        => false: napiš hlášku "open a conversation to start a chat" 
+
+JAK ZOBRAZÍME KONVERZACI PO KLIKNUTÍ NA KOMPONENTU <Conversation />? 
+c) Zabalením komponenty do divu a nastavením onClick eventu na div. 
+    c1) Mapujeme všechny elementy (c) pole konverzací z MongoDB do <Conversation/> komponenty, která je zabalená v divu s onClick eventem.
+    c2) Tento onClick event vyvolá HOOK setCurrentChat, který nastaví hodnotu currentChat na zvolený namapovaný element (c). */
+    <div className="chatMenuWrapper">
+    {conversations.map((c) => (                 
+    <div onClick={() => setCurrentChat(c)}>
+        <Conversation key={c._id} conversation={c} currentUser={user} />
+    </div>
+    ))/*
+
+JAK NAČTEME DATA ZE SERVERU DO STATE PŘI KLIKNUTÍ NA KONVERZACI?
+d) Nastavíme si useEffect HOOK a dependancy nastavíme na currentChat - viz níže. */
+// d1) useEffect se provede při načtení všech komponent
+    useEffect(() => {   
+        const getMessages = async () => {
+        try {
+            const res = await axios.get(`${API}messages/${currentChat?._id}`);
+            console.log(res.data);
+        } catch (err) {
+            console.log(err);
+        }
+        };
+        getMessages();
+// d2) Nastavíme DEPENDANCY - pokud dojde k změně currentChat - tak se tento HOOK ZNOVU PROVEDE.
+    }, [currentChat]); 
+/*
+Kód výše v praxi znamená že po kliknutí na komponentu Conversation se vykoná onClick event setCurrentChat a změní se currentChat
+    => na zákaladě této změny se znovu vykoná useEffect HOOK kde pomocí setMessages ukládáme zprávy do state.
+HOTOVO: PO KLIKNUTÍ NA KONVERZACI SE VYRENDERUJE NOVÁ KONVERZACE A DO STATE SE ULOŽÍ ZPRÁVY / MESSAGES 
+
+e) RENDEROVÁNÍ ZPRÁV / MESSAGES.
+K renderování využijeme podobně mapování jako jsme to dělali s konverzací. 
+e1) Zprávy předáváme přes PROPS do komponenty Message */
+// Messenger.jsx
+    <div className="chatBoxTop">
+        {messages.map((m) => (
+        <Message message={m} /> 
+    ))} </div>/*
+e2) Zprávy přijímáme v komponentě Message.jsx */
+// Message.jsx 
+export default function Message({ own, message }) { /*
+
+f) Musíme identifikovat zprávy OWN vs zprávy PŘÍTELE.
+    f1) Nastavíme kondiční renderování a v moment kdy userId === senderId => own: true */
+    {messages.map((m) => (
+        <Message message={m} own={m.sender === user.id}/>
+      ))} /*
+
+g) Zobrazení času odeslání zprávy
+    g1) Pomocí knihovny timeago naformátujeme čas který je z databáze pomocí kódu níže uvnitř Message.jsx */
+    <div className="messageBottom">{format(message.createdAt)}</div> /*
+
+
+V) SENDING A NEW MESSAGE
+----------------------------------------------------------------------
+Jak nastavit odesílání zpráv do chatu?
+a) Naprogramujeme textarea aby při změně dat (onChange) se uložilo do state.  */
+    // Messenger.jsx
+    <textarea
+        className="chatMessageInput"
+        placeholder="Write something..."
+        onChange={(e) => setNewMessage(e.target.value)}
+        value={newMessage}>
+    </textarea>
+    <button className="chatSubmitButton" onClick={handleSubmit}> Send </button> /*
+b) Nastavíme aby při kliknutí na tlačítko "Odeslat" došlo k odeslání zprávy z textare (= newMessage uvnitř state) a handleSubmit  */
+    const handleSubmit = async (e) =>{
+        e.preventDefault();
+        const message = {
+        sender: user._id,
+        text: newMessage,
+        conversationId = currentChat._id;
+        };
+        try {
+        const res = await axios.post("/messages", message);
+// c) Přidáme naši novou zprávu (newMessage) do pole zpráv, které jsme si načetli z REST API (= messages[] uvnitř state) - viz níže
+        setMessages([...messages, res.data]);
+        } catch (err) {
+        console.log(err);
+        }
+    } /*
+HOTOVO: Posíláme nové zprávy v chatu a ukládají se do databáze.
+
+
+V2) SCROLLOVÁNÍ NA KONEC DIVU PO PŘIDÁNÍ NOVÉ ZPRÁVY
+----------------------------------------------------------------------------------------
+- Vytvoříme si referenci pomocí useRef a vložíme ji na Message element.
+- Naprogramujeme si useEffect kód jelikož chceme vždy při změně message ve state nascrollovat na referenční message = nová message. */
+const scrollRef = useRef();
+
+<div ref={scrollRef}>
+    <Message message={m} own={m.sender === user?._id} />
+</div>
+
+useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);/*
+
+HOTOVO: V chatovacím okně dojde k automatickému scrollování na konec chatu po otevření, či odeslání nové zprávy.
+
+PROBLÉM: Když odešleme zprávu jinému uživateli tak si musí refreshnout stránku k zobrazení zprávy.
+ŘEŠENÍ: IMPLEMENTACE SOCKET.IO PRO INSTANTNÍ CHAT
+
+
+W) INSTALACE SOCKET.IO
+------------------------------------------------------
+a) Konfigurace SOCKET.IO SERVERU
+  - nová složka "socket"
+  - vstoupit do složky "socket"
+    - npm init -y
+    - npm add nodemon socket.io
+  - otevřeme socket/package.json
+    - upravíme scripty => nadefinujeme start  */
+        "scripts": {
+            "start": "nodemon index.js"
+        },/*
+    - vytvoříme soubor "index.js" uvnitř socket
+        - do souboru napíšeme: */
+            const io = require("socket.io")(8900,{
+                cors:{
+                    origin:"http://localhost:3000",
+                },
+            });
+            io.on("connection", (socket)=> {
+                console.log("a user connected")
+            }); /*
+b) Napojení SOCKET.IO na stranu klienta
+    - v příkazovém řádku uvnitř /client napíšeme příkaz:
+         npm add socket.io-client
+
+c) Start SOCKET.IO serveru
+    - v příkazovém řádku uvnitř /socket napíšeme příkaz:
+        npm start
 
 
 
+X) IMPLEMENTACE SOCKET.IO
+-----------------------------------------------------------------------------------------------------------
+Po spuštění SOCKET.IO serveru vejdeme do Messenger.jsx abychom implementovali SOCKET.IO server
+    a) Naimportujeme socket.io. */
+        import {io} from "socket.io-client"; /*
+    b) Vytvoříme const socket uvnitř state pomocí useState */
+        const [socket, setSocket] = useState(null); /*
+    c) Vytvoříme useEffect() aby došlo k nastavení socket ve state při re-renderování stránky proto useEffect()*/    
+        useEffect(() => {
+            setSocket(io("ws://localhost:8900"));
+        }, []);/*
 
+d) VYSVĚTLENÍ KÓDU SOCKET.IO
+        V SOCKET SERVER:
+                    use io = odešli něco klientovy
+                    use io.emit = odešli něco každému klientovy
+                    use io.to(socketID).emit = odešli něco jednomu klientovy
+                    use socket.on = získáme něco od klienta
+        V SOCKET CLIENT:
+                    use socket.emit = odešli něco na server
+                    use socket.on   = získej něco ze serveru
 
+e) ZPRÁVA ZE SERVERU VŠEM KLIENTŮM:
+    e1) Ze serveru v socket/index.js odešleme všem pomocí "io.emit" zprávu všem uživatelům. */
+        // index.js
+        io.emit("welcome","hello this is socket server!"); /* DŮLEŽITÉ: Tímto odešleme zprávu se serveru ale je třeba ji načíst v klientu!
+    e2) V klientu uvnitř client/.../Messenger.jsx NAČTEME zprávu ze serveru pomocí "socket.on"
+            - socket.on se vždy vykoná po re-renderování (v useEffect), pokud se změní state socket (dependency = socket) 
+            - napíšeme do konzole zprávu kterou získáme ze serveru pomocí socket.on */
+        // Messenger.jsx
+        useEffect(()=>{
+            socket.on("welcome", messages=>{
+              console.log(messages);
+            })
+          },[socket]);/*
+HOTOVO: DOKÁŽEME SKRZE SOCKET.IO NAČÍTAT ZPRÁVY ZE SERVERU A ZOBRAZOVAT JE V KLIENTU
 
+f) ZOBRAZENÍ VŠECH ONLINE UŽIVATELŮ = odeslání zprávy ze serveru specifickým klientům  
+K odeslání zprávy 1 userovy ze serveru potřebujeme znát socket id daného usera.
+PROBLÉM: Socket id se pokaždé mění
+ ŘEŠENÍ: Nejdříve odešleme pokaždé z klienta userId na server
+    f1) Odešleme userId a socketId z KLIENTA (Messenger.jsx) na server
+          - smažeme useState pro socket a nahradíme to useRef. */
+        // Messenger.jsx
+        const socket = useRef();
+        useEffect(() => {
+            socket.current = io("ws://localhost:8900");
+        }, []);
+        ... 
+        useEffect(() => {
+            socket.current.emit("addUser", user.id)
+          }, [user]); /*
+    f2) Načteme userId z klienta na SERVER (index.js) 
+          - vytvoříme si prázdné pole userů, kde v poly objektů bude uloženo userId a socketId jako vlastnost (zpřístupnění = user.userId)
+          - pomocí "socket.on" získáme userId ze serveru a získáme ho tak že vyhledáme "addUser" což jsme napsali do emit u klienta
+          - následně napíšeme fci kdy přijímáme userId a vkládáme ho do fce addUser()
+          - naprogramujeme fci addUser() abychom zkontrolovali zda userId je již zahrnut v poly userů. 
+    f3) Uložíme userId do pole na serveru a toto pole všech userů s socketId a userId POŠLEME VŠEM KLIENTŮM díky příkazu io.emit("getUsers") */
+            // index.js
+                // iniciace pole objektů users
+                let users = [];
+                // fce na kontrolu a přidání usera do users[]
+                const addUser = (userId, socketId) => {
+                    // pomocí .some si namapujeme jednotlivé elementy (= user) pole users a kontrolujeme zda jejich vlastnost .userId neni shodna s arg userId
+                    !users.some((user) => user.userId === userId) &&
+                    users.push({userId, socketId});  //pokud shoda není (negace před výrazem výše) = true & může se vykonat přidání userId a socketId do users
+                };
+                // napojení na socket.io a odeslání dat klientům
+                io.on("connection", (socket)=> {
+                    console.log("a user connected");
+                    io.emit("welcome","hello this is socket server!");
+                        //získej userId a socketId od uživatele
+                    socket.on("addUser", userId =>{
+                        addUser(userId, socket.id);
+                        //odešli pole userů s userId a socketId všem klientům
+                        io.emit("getUsers", users);
+                    });
+                });/*
+    f4) Načteme pole všech userů (.userId & .socketId) ze serveru v KLIENTU skrze příkaz "getUsers".
+        - Pomocí "socket.on" získáme data ze server - budeme používat socket.on("getUsers") uvnitř useEffect hooku kde již máme "addUser"
+        - Pomocí console.log(users) si můžeme zobrazit seznam všech userů které jsou v SOCKET.IO a uvidíme userId a socketId. */
+            // Messenger.jsx
+                const socket = useRef();
+                useEffect(() => {
+                    socket.current = io("ws://localhost:8900");
+                }, []);
+                useEffect(() => {
+                    socket.current.emit("addUser", user._id);
+                    socket.current.on("getUsers", (users) => {
+                    console.log(users);
+                    });
+                }, [user]); /*
+        - Výstup console.log() vypadá takto (pro 2 přihlášené uživatele): */
+            0: {userId: '624350a8df288254db35b02d', socketId: 'UukyME9LodYjsFPjAAEz'}
+            1: {userId: '6277b6d7a69e3424b2b63ff2', socketId: 'dzZqxF2K46i4eeMWAAEJ'}/*
+HOTOVO: DOKÁŽEME ZÍSKAT SEZNAM PŘIHLÁŠENÝCH LIDÍ DÍKY KOMUNIKACE KLIENT => SERVER => KLIENT SKRZE SOCKET.IO
+ PROBLÉM: Když user odejde z aplikace tak je stále zahrnut v seznamu userů, ačkoliv tam správně být nemá
+ => ŘEŠENÍ: Naprogramování metody "disconnect" 1:34:00 
+    f5) Naprogramujeme metodu socket.on("disconnect") na straně SERVERU pro odebrání usera z pole userů (= odhlášení ze Socket.IO)
+        - Vytvoříme fci removeUser() ve které vyfiltrujeme pouze ty usery které nemají své socketId === socketId jež vstupuje jako arg */
+        // index.js
+            const removeUser = (socketId) =>{
+                users = users.filter(user => user.socketId !== socketId);
+            } /*
+    f6) Zavoláme removeUser(socketId) uvnitř metody "disconnect" a jako argument vložíme socket.id. 
+    f7) Po odebrání usera pošleme ZE SERVERU znovu KLIENTŮM seznam userů ("getUsers"), který bude aktualizovaný po odebrání. */
+        // index.js
+            socket.on("disconnect", ()=>{
+                console.log("A user was diconnected from Socket.IO");
+                removeUser(socket.id);
+                io.emit("getUsers", users); // odeslání aktualizovaných userů
+            })/*
+HOTOVO: NYNÍ SE NÁM ODEBÍRÁ / PŘIDÁVÁ USER DO GLOBÁLNÍHO SEZNAMU PŘIHLÁŠENÝCH UŽIVATELŮ SKRZE SOCKET.IO
+    - Díky tomu můžeme živě přistoupit k přihlášeným uživatelům a napsat jim.
+    - Díky tomu uvidíme seznam online lidí.
+            
 
+Y) IMPLEMENTACE SOCKET.IO - ODESÍLÁNÍ PRIVÁTNÍCH ZPRÁV V CHATU.
+------------------------------------------------------------------------------------------------
+Jak probíhá odeslání privátní zprávy:
+
+    1) Klient John odešle zprávu na server - KLIENT_socket.emit("sendMessage")
+        Messenger.jsx => handleSubmit(): */
+            socket.emit("sendMessage"):       
+                { senderId: user._id,
+                  receiverId: receiverId 
+                  text: newMessage}/*
+
+    2) Server načte zprávu od Johna - SERVER_socket.on("sendMessage")
+        index.js:*/
+            socket.on("sendMessage", ({senderId, receiverId, text})=>{ /* data které nám posílá klient
     
+    3) Server odešle zprávu od John specifickému klientovy Jane - SERVER_io.to(socketID).emit
+        index.js:*/
+        socket.on("sendMessage", ({senderId, receiverId, text})=>{
+            //najdeme na základě userId objekt usera Jane v poly userů na serveru, kterému chce klient John poslat zprávu (= Jane)
+            const user = getUser(receiverId);
+            // tomuto specifickému "user" (= Jane) odešleme text zprávy a id odesílatele (= John)
+            io.to(user.socketId).emit("getMessage", {   // ZDE ODESÍLÁME ZPRÁVU JANE OD JOHNA
+                senderId, 
+                text,
+            });
+        });/*
+    
+    4) Klient Jane načte zprávu od Johna ze serveru - KLIENT_socket.on("getMessage")
+        Messenger.jsx => useEffect((),[]): */
+            useEffect(() => {
+                socket.current = io("ws://localhost:8900");
+                socket.current.on("getMessage", (data) => {
+                setArrivalMessage({
+                    sender: data.senderId,
+                    text: data.text,
+                    createdAt: Date.now(),
+                });
+                });
+            }, []); /*
+
+    5) Klient Jane & John - přidáme novou zprávu ze serveru do state Klienta do message (proto je vytvořen state arrivalMessage - viz nahoře) 
+        - Při změně arrivalMessage nebo currentChat se vždy provede kód níže.
+        Messenger.jsx => useEffect((),[arrivalMessage, currentChat]): */
+        useEffect(() => {
+            //Pomocí kódu níže kontrolujeme zda arrivalMessage není prázdný a zároven zabranujeme aby zprávy viděl někdo jiný mimo 2 členy chatu.
+            arrivalMessage &&
+            currentChat?.members.includes(arrivalMessage.sender) &&
+            setMessages((prev) => [...prev, arrivalMessage]);
+        }, [arrivalMessage, currentChat]);/*
+
+a) SERVER PŘIJÍMÁ ZPRÁVU OD KLIENTA A:  socket.on("sendMessage"), kde budeme přijímat userId, receiverId a text zprávy.
+    a1) Uvnitř "sendMessage" budeme volat metodu getUser abychom na základě userId našli objekt usera. */
+        const getUser = (userId) =>{
+            return users.find(users=>user.userId === userId)
+        } /*
+    a2) Naprogramuje "sendMessage" kód kde budeme volat getUser() */
+        //index.js
+        socket.on("sendMessage", ({senderId, receiverId, text})=>{
+            //najdeme na základě userId objekt usera kterému posíláme zprávu
+            const user = getUser(receiverId);
+            // tomuto specifickému "user" odešleme text zprávy a id odesílatele (= autor zprávy)
+            io.to(user.socketId).emit("getMessage", {
+                senderId, 
+                text,
+            });
+        });    /*
+
+b) KLIENT A ODESÍLÁ NA SERVER:  po kliknutí na odeslání bude text zprávy odeslán na server odkud může být poslán recieveru
+    b1) Po submitu zprávu pošleme na server následující:
+        - senderId: user._id; (z kontextu)
+        - recieverId: id z chat.members které se nerovná našemu id
+        - text: newMessage
+    b2) Získáme ID 2. člena konverzace neboli recievera. 
+        - Pomocí kódu níže zjistíme id 2. člena chatu tím, že jeho id se nerovná našemu id */
+            //Messenger.jsx
+            const receiverId = currentChat.members.find(
+                (member) => member !== user._id
+            ); /*
+    b3) Naprogramujeme "sendMessage" kód pro odeslání zprávu na server která obsahuje všechny nutná data. */
+        //Messenger.jsx
+        socket.current.emit("sendMessage", {
+            senderId: user._id,
+            receiverId, //receiverId => receiverId: receiverId;
+            text: newMessage
+        });/*
+HOTOVO: Odesíláme zprávu na SOCKET.IO server po kliknutí na SUBMIT. Zpráva obsahuje senderId, receiverId & text.
+
+c) KLIENT B PŘIJÍMÁ ZPRÁVU ZE SERVERU: Získáme zprávu ze SOCKET.IO serveru POKAŽDÉ KDY DOJDE K RE-RENDEROVÁNÍ díky useEffect HOOKu (w/o dependancy).
+    c1) Uložíme do state PŘÍCHOZÍ ZPRÁVU (arrivalMessage) */
+        const [arrivalMessage, setArrivalMessage] = useState(null); /*
+    c2) Upravíme podobu PŘÍCHOZÍ ZPRÁVY aby byla jako ostatní v MongoDB - uvnitř index.js "getMessage" máme k dispozici senderId & text. 
+        V MongoDB musí mít message následující data:
+            - sender
+            - text
+            - createdAt
+        Upravíme tedy strukturu objektu který vkládáme do arrivalMessage pomocí setArrivalMessage.   */
+            useEffect(() => {
+            socket.current.on("getMessage", (data) => { //Ze serveru (index.js) máme u "getMessage" uložen obj data = {senderId, text}
+                setArrivalMessage({
+                sender: data.senderId,  //načteme ze serveru
+                text: data.text,        //načteme ze serveru
+                createdAt: Date.now(),  //doplníme aktuální čas
+                });
+            });    /*
+    c3) Vložíme NOVOU PŘÍCHOZÍ zprávu do state současných zpráv - pomocí useEffect HOOKU tak uděláme při každé změně chatu a arrivalMessage*/
+        useEffect(() => {
+            //Pomocí kódu níže kontrolujeme zda arrivalMessage není prázdný a zároven zabranujeme aby zprávy viděl někdo jiný mimo 2 členy chatu.
+            arrivalMessage &&
+            currentChat?.members.includes(arrivalMessage.sender) &&
+            setMessages((prev) => [...prev, arrivalMessage]);
+        }, [arrivalMessage, currentChat]);/*
+
+
+HOTOVO: V MESSENGERU POSÍLÁME INSTANTNÍ ZPRÁVY DÍKY SOCKET.IO 
+        => UŽIVATELÉ JSOU V 1 KONVERZACI / RELACI A DÍKY SOCKET.IO SI INSTANTNĚ VYMĚNUJÍ ZPRÁVY.
 
 
 
+
+
+Z) IMPLEMENTACE SOCKET.IO - ZOBRAZENÍ ONLINE UŽIVATELŮ
+Vytvoříme si ve state onlineUsers.
+Z komponenty Messenger budeme předávat následující data do komponenty <ChatOnline>: 
+    - onlineUsers (ze state Messenger.jsx)
+    - user._id (z kontextu z Messenger.jsx)
+    - setCurrenChat (setState metoda z Messenger.jsx)
+
+a) Data výše předáme do komponenty <ChatOnline /> */
+    // Messenger.jsx
+        <div className="chatOnlineWrapper">
+            <ChatOnline
+              onlineUsers={onlineUsers}
+              currentId={user._id}
+              setCurrentChat={setCurrentChat}
+            />
+        </div> 
+    // ChatOnline.jsx
+        export default function ChatOnline({ onlineUsers, currentId, setCurrentChat }) {          
+    /*
+b) ZÍSKÁNÍ SEZNAMU PŘÁTEL: Uvnitř komponenty ChatOnline.jsx vytvoříme state: friends, onlineFriends.
+    - K získání dat do state "friends" využijeme metodu getFriends() z users.js API => tuto metodu budeme volat v rámci useEffect HOOKU. */
+    //ChatOnline.jsx
+    useEffect(() => {
+        const getFriends = async () => {
+          const res = await axios.get(`${API}users/friends/${currentId}`);
+          setFriends(res.data);
+        };
+        getFriends();
+      }, [currentId]);
+    console.log(friends);/*
+HOTOVO: Získáváme friends z API a ukládáme si seznam přátel do state => jsou zobrazeny v consoly výše.
+
+c) ZOBRAZENÍ PŘÁTEL ONLINE - v useEffect HOOK vyfiltrujeme ze seznamu přátel pouze ty které jsou v onlineFriends.
+    c1) Získání online pátel ze SOCKET.IO provádíme v Messenger.jsx - viz níže. */
+    //Messenger.jsx
+    useEffect(() => {
+        socket.current.emit("addUser", user._id);
+        socket.current.on("getUsers", (users) => {
+            setOnlineUsers(
+                //Níže filtrujeme pouze ty usery které přihlášený user sleduje a jejich userId === userId followingu přihlášeného usera
+                user.followings.filter((f) => users.some((u) => u.userId === f))
+              );
+    }, [user]); /*
+    c2) Seznam těchto online přátel vkládáme do komponenty <ChatOnline/> - viz kapitola výše.
+    c3) Pomocí nového useEffect() HOOKu budeme filtrovat pouze ty usery ze seznamu přátel jež mají id zahrnuto v onlineUsers.*/ 
+    //ChatOnline.jsx
+    useEffect(() => {
+        setOnlineFriends(friends.filter((f) => onlineUsers.includes(f._id)));
+      }, [friends, onlineUsers]); /*
+    c4) Pro každého přihlášeného usera budeme mapovat na <div> element přítele - viz níže. */
+    // Chatonline.jsx
+    return (
+                <div className="chatOnline">
+          {onlineFriends.map((o) => (   // ZDE MAPUJEME KAŽDÉHO Z onlineFriends na tento element
+            <div className="chatOnlineFriend">
+              <div className="chatOnlineImgContainer">
+                <img
+                  className="chatOnlineImg"
+                  src={
+                    o?.profilePicure
+                      ? PF + o.profilePicure
+                      : PF + "person/noAvatar.png"
+                  }
+                  alt=""
+                />
+                <div className="chatOnlineBadge"></div>
+              </div>
+              <span className="chatOnlineName">{o.username}</span>
+            </div>
+          ))}
+                    </div>
+      ); /*
+
+
+d) ZOBRAZENÍ CHATU PO KLIKNUTÍ NA ONLINE USERA 
+d1) Naprogramujeme BACKEND API kód pro získání konverzace ve které se vysktují 2x userId v conversation.js */
+    //get conv includes two userId
+    router.get("/find/:firstUserId/:secondUserId", async (req,res)=>{
+    try{
+        //Pomocí kódu níže najdeme konverzaci jejíž členy (všechny členy => $all) jsou tvořeny z firstUserId & secondUserId (na pořadí nezáleží)
+        const conversation = await Conversation.findOne({
+        members: {$all: [req.params.firstUserId, req.params.secondUserId]}
+        });
+        res.status(200).json(conversation);
+    } catch(err){
+        res.status(500).json(err);
+    }
+    });/*
+
+d2) Naprogramujeme onClick metodu na základě které se při kliknutí na usera nastaví současný chat ve state => zobrazí se chat s daným userem.*/
+return (
+    <div className="chatOnline">
+      {onlineFriends.map((o) => (
+        <div className="chatOnlineFriend" onClick={() => handleClick(o)}>
+...            
+const handleClick = async (user) => {
+    try {
+      const res = await axios.get(
+        `${API}conversations/find/${user._id}/${currentId}`
+      );
+      setCurrentChat(res.data);
+    } catch (err) {
+      console.log(err);
+    }
+  };{/*
+
+  HOTOVO: Po kliknutí na usera který je online se nám zobrazí konverzace s ním
+  TODO: Každá zpráva bude mít profilový obrazek odesílatele 
+        - BE API => getImg(userId)
+        - FE => src={own? getImg(userId) : getImg(secondUserId)}
+ 
 
 
 

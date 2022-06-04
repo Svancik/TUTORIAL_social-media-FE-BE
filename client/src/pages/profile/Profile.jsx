@@ -44,7 +44,7 @@ export default function Profile() {
                 className="profileUserImg"
                 src={
                   user.profilePicture
-                    ? PF + user.profilePicture
+                    ? PF + user?.profilePicture
                     : PF + "person/noAvatar.png"
                 }
                 alt=""
